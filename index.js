@@ -42,17 +42,57 @@ app.get('/participants', async (req, res) => {
         mongoClient.connect()
 
         const participantsCollection = db.collection('participants')
+        const participants = await participantsCollection.find({}).toArray()
   
-        let participantsOnline = await participantsCollection.find({}).toArray()
-  
-        res.send(participantsOnline)
+        res.send(participants)
     } catch(err) {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
   
     mongoClient.close()
-});
+})
+
+app.post('/messages', async (req,res) => {
+    console.log(`user ~> ${req.header('User')}`)
+
+    const { to, text, type } = req.body
+    let from = req.header('User')
+
+    try {
+        mongoClient.connect()
+
+        const messagesCollection = db.collection('messages')
+        await messagesCollection.insertOne({from, to, text, type, time: dayjs(Date.now()).format('HH:mm:ss')})
+
+        res.sendStatus(201)
+    } catch(err) {
+        console.log(`Erro no servidor: ${err}`)
+        res.sendStatus(500)
+    }
+})
+
+app.get('/messages', async (req, res) => {
+    let name = req.header('User')
+    console.log(req.header('User'))
+
+    try {
+        mongoClient.connect()
+
+        const messagesCollection = db.collection('messages')
+        const messages = await messagesCollection
+        .find({ $or: [{ type: 'message' }, { type: 'status' }, { from: name }, { to: name }]})
+        .limit(parseInt(req.query.limit))
+        .sort({ time: -1 }).toArray()
+  
+        res.send(messages)
+    } catch(err) {
+        console.log(`Erro no servidor: ${err}`)
+        res.sendStatus(500)
+    }
+  
+    mongoClient.close()
+})
 
 app.listen(process.env.PORT, () => {
     console.log('Servidor rodando na porta:', process.env.PORT)
