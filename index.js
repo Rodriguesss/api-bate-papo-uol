@@ -3,6 +3,7 @@ import joi from 'joi'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import dayjs from 'dayjs'
+import { stripHtml } from "string-strip-html";
 import initMongo from './src/database/database.js'
 
 dotenv.config()
@@ -65,7 +66,8 @@ app.post('/participants', async (req, res) => {
         if (validation.error) {
             res.sendStatus(422)
         } else {
-            const name = req.body.name
+            const name = stripHtml(req.body.name).result.trim()
+
             const participant = await participantsCollection.find({ name }).toArray()
 
             if (participant.length !== 0) {
@@ -96,8 +98,12 @@ app.get('/participants', async (req, res) => {
 })
 
 app.post('/messages', async (req,res) => {
-    const { to, text, type } = req.body
-    let from = req.header('User')
+    let { to, text, type } = req.body
+    let from = stripHtml(req.header('User')).result.trim()
+
+    to = stripHtml(to).result.trim()
+    text = stripHtml(text).result.trim()
+    type = stripHtml(type).result.trim()
 
     const bodySchema = joi.object({
         to: joi.string().required(),
@@ -139,10 +145,11 @@ app.get('/messages', async (req, res) => {
         const messagesCollection = db.collection('messages')
         const messages = await messagesCollection
         .find({ $or: [{ type: 'message' }, { type: 'status' }, { from: name }, { to: name }]})
+        .sort({ _id: -1 })
         .limit(parseInt(req.query.limit))
-        .sort({ time: 1 }).toArray()
-  
-        res.send(messages)
+        .toArray()
+
+        res.send(messages.reverse())
     } catch(err) {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
