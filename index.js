@@ -70,6 +70,8 @@ app.post('/messages', async (req,res) => {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
+
+    mongoClient.close()
 })
 
 app.get('/messages', async (req, res) => {
@@ -86,6 +88,29 @@ app.get('/messages', async (req, res) => {
         .sort({ time: -1 }).toArray()
   
         res.send(messages)
+    } catch(err) {
+        console.log(`Erro no servidor: ${err}`)
+        res.sendStatus(500)
+    }
+  
+    mongoClient.close()
+})
+
+app.post('/status', async (req, res) => {
+    let name = req.header('User')
+
+    try {
+        mongoClient.connect()
+
+        const participantsCollection = db.collection('participants')
+        const participant = await participantsCollection.find({ name }).toArray()
+
+        if (participant.length !== 0) {
+            await participantsCollection.updateOne({ _id: participant[0]._id }, { $set: { lastStatus: Date.now() } })
+            res.sendStatus(200) 
+        } else {
+            res.sendStatus(404)
+        }
     } catch(err) {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
