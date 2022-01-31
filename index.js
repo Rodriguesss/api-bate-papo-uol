@@ -1,4 +1,5 @@
 import express from 'express'
+import joi from 'joi'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import dayjs from 'dayjs'
@@ -49,7 +50,11 @@ app.get('/', (req, res) => {
 })
 
 app.post('/participants', async (req, res) => {
-    const name = req.body.name
+    const bodySchema = joi.object({
+        name: joi.string().required()
+    })
+
+    const validation = bodySchema.validate(req.body, { abortEarly: true })
 
     try {
         mongoClient.connect()
@@ -57,10 +62,21 @@ app.post('/participants', async (req, res) => {
         const participantsCollection = db.collection('participants')
         const dbMessages = db.collection('messages')
 
-        await participantsCollection.insertOne({name , lastStatus: Date.now()})
-        await dbMessages.insertOne({from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs(Date.now()).format('HH:mm:ss')})
+        if (validation.error) {
+            res.sendStatus(422)
+        } else {
+            const name = req.body.name
+            const participant = await participantsCollection.find({ name }).toArray()
 
-        res.sendStatus(201)
+            if (participant.length !== 0) {
+                res.sendStatus(409)
+            } else {
+                await participantsCollection.insertOne({name , lastStatus: Date.now()})
+                await dbMessages.insertOne({from: name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs(Date.now()).format('HH:mm:ss')})
+
+                res.sendStatus(201)
+            }
+        }
     } catch(err) {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
@@ -83,11 +99,31 @@ app.post('/messages', async (req,res) => {
     const { to, text, type } = req.body
     let from = req.header('User')
 
+    const bodySchema = joi.object({
+        to: joi.string().required(),
+        text: joi.string().required(),
+        type: joi.string().valid('message', 'private_message').required()
+    })
+
+    const validation = bodySchema.validate(req.body, { abortEarly: true })
+
     try {
         const messagesCollection = db.collection('messages')
-        await messagesCollection.insertOne({from, to, text, type, time: dayjs(Date.now()).format('HH:mm:ss')})
+        const participantsCollection = db.collection('participants')
 
-        res.sendStatus(201)
+        if (validation.error) {
+            res.sendStatus(422)
+        } else {
+            const participant = await participantsCollection.find({ name: from }).toArray()
+
+            if (participant.length === 0) {
+                res.sendStatus(422)
+            } else {
+                await messagesCollection.insertOne({from, to, text, type, time: dayjs(Date.now()).format('HH:mm:ss')})
+                
+                res.sendStatus(201)
+            }
+        }
     } catch(err) {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
