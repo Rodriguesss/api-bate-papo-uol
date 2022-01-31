@@ -9,8 +9,42 @@ dotenv.config()
 const app = express()
 const { mongoClient, db } = await initMongo()
 
+const MILLISECONDS = 10000
+
 app.use(express.json())
 app.use(cors())
+
+setInterval(async () => {
+    let messages = []
+
+    try {
+        mongoClient.connect()
+
+        const participantsCollection = db.collection('participants')
+        const messagesCollection = db.collection('messages')
+
+        const participantsWithTimeOut = await participantsCollection.find({ lastStatus: { $lte: (Date.now() - MILLISECONDS) } }).toArray()
+    
+        if (participantsWithTimeOut.length === 0) {
+            return
+        }
+
+        participantsWithTimeOut.forEach(participant => {
+            messages.push({
+                from: participant.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs(Date.now()).format('HH:mm:ss')
+            })
+        })
+
+        await participantsCollection.deleteMany({ lastStatus: { $lte: (Date.now() - MILLISECONDS) } })
+        await messagesCollection.insertMany([...messages])
+        
+    } catch(err) {
+        console.log(`Erro no servidor: ${err}`)
+        res.sendStatus(500)
+    }
+
+    mongoClient.close()
+}, 15000)
 
 app.get('/', (req, res) => {
     res.send('Hello world!')
@@ -54,8 +88,6 @@ app.get('/participants', async (req, res) => {
 })
 
 app.post('/messages', async (req,res) => {
-    console.log(`user ~> ${req.header('User')}`)
-
     const { to, text, type } = req.body
     let from = req.header('User')
 
@@ -76,7 +108,6 @@ app.post('/messages', async (req,res) => {
 
 app.get('/messages', async (req, res) => {
     let name = req.header('User')
-    console.log(req.header('User'))
 
     try {
         mongoClient.connect()
