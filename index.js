@@ -9,6 +9,8 @@ dotenv.config()
 const app = express()
 const { mongoClient, db } = await initMongo()
 
+mongoClient.connect()
+
 const MILLISECONDS = 10000
 
 app.use(express.json())
@@ -18,8 +20,6 @@ setInterval(async () => {
     let messages = []
 
     try {
-        mongoClient.connect()
-
         const participantsCollection = db.collection('participants')
         const messagesCollection = db.collection('messages')
 
@@ -42,8 +42,6 @@ setInterval(async () => {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
-
-    mongoClient.close()
 }, 15000)
 
 app.get('/', (req, res) => {
@@ -67,14 +65,10 @@ app.post('/participants', async (req, res) => {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
-
-    mongoClient.close()
 })
 
 app.get('/participants', async (req, res) => {
     try {
-        mongoClient.connect()
-
         const participantsCollection = db.collection('participants')
         const participants = await participantsCollection.find({}).toArray()
   
@@ -83,8 +77,6 @@ app.get('/participants', async (req, res) => {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
-  
-    mongoClient.close()
 })
 
 app.post('/messages', async (req,res) => {
@@ -92,8 +84,6 @@ app.post('/messages', async (req,res) => {
     let from = req.header('User')
 
     try {
-        mongoClient.connect()
-
         const messagesCollection = db.collection('messages')
         await messagesCollection.insertOne({from, to, text, type, time: dayjs(Date.now()).format('HH:mm:ss')})
 
@@ -102,8 +92,6 @@ app.post('/messages', async (req,res) => {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
-
-    mongoClient.close()
 })
 
 app.get('/messages', async (req, res) => {
@@ -116,15 +104,13 @@ app.get('/messages', async (req, res) => {
         const messages = await messagesCollection
         .find({ $or: [{ type: 'message' }, { type: 'status' }, { from: name }, { to: name }]})
         .limit(parseInt(req.query.limit))
-        .sort({ time: -1 }).toArray()
+        .sort({ time: 1 }).toArray()
   
         res.send(messages)
     } catch(err) {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
-  
-    mongoClient.close()
 })
 
 app.post('/status', async (req, res) => {
@@ -146,8 +132,6 @@ app.post('/status', async (req, res) => {
         console.log(`Erro no servidor: ${err}`)
         res.sendStatus(500)
     }
-  
-    mongoClient.close()
 })
 
 app.listen(process.env.PORT, () => {
